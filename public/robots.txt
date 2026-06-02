@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://malla-info.sklconnect.com/sitemap.xml
