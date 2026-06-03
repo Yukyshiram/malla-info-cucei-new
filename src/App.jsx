@@ -16,10 +16,14 @@ function App() {
   const [filterArea, setFilterArea] = useState('');
   const [filterCompetency, setFilterCompetency] = useState('');
 
+  // Long press refs for mobile interaction
+  const longPressTimeoutRef = React.useRef(null);
+  const isLongPressActive = React.useRef(false);
+
   // Theme state supporting multiple themes
   const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('malla-theme') || 'sunset';
-    return (saved === 'dark' || saved === 'dark-theme') ? 'sunset' : saved;
+    const saved = localStorage.getItem('malla-theme') || 'space';
+    return (saved === 'dark' || saved === 'dark-theme') ? 'space' : saved;
   });
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
 
@@ -286,12 +290,44 @@ function App() {
       return;
     }
 
+    const isMobileTablet = window.innerWidth <= 1024;
+
     if (selectedSubject && selectedSubject.clave === sub.clave) {
       setSelectedSubject(null);
       setIsDetailsSidebarOpen(false);
     } else {
       setSelectedSubject(sub);
+      // On mobile/tablet, single-click ONLY highlights the flow (roadmap) and keeps popup closed.
+      // On desktop, it does both.
+      if (!isMobileTablet) {
+        setIsDetailsSidebarOpen(true);
+      }
+    }
+  };
+
+  // --- TOUCH GESTURES FOR MOBILE/TABLET LONG PRESS ---
+  const handleTouchStart = (sub) => {
+    isLongPressActive.current = false;
+    longPressTimeoutRef.current = setTimeout(() => {
+      isLongPressActive.current = true;
+      setSelectedSubject(sub);
       setIsDetailsSidebarOpen(true);
+    }, 500); // 500ms hold triggers the details modal popup
+  };
+
+  const handleTouchEnd = (e, sub) => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+    }
+    if (isLongPressActive.current) {
+      // Prevent browser from firing simulated click event
+      e.preventDefault();
+    }
+  };
+
+  const handleTouchMove = () => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
     }
   };
 
@@ -674,13 +710,13 @@ function App() {
       </div>
 
       {/* FILTERS CONTAINER */}
-      <div className="glass-effect" style={{ padding: '1rem 2rem', borderRadius: '18px', marginBottom: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Área:</label>
+      <div className="filters-container glass-effect">
+        <div className="filter-group">
+          <label className="filter-label">Área:</label>
           <select
             value={filterArea}
             onChange={(e) => setFilterArea(e.target.value)}
-            style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+            className="filter-select"
           >
             <option value="">Todas</option>
             {Object.entries(AREAS).map(([key, val]) => (
@@ -689,12 +725,12 @@ function App() {
           </select>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Competencia:</label>
+        <div className="filter-group">
+          <label className="filter-label">Competencia:</label>
           <select
             value={filterCompetency}
             onChange={(e) => setFilterCompetency(e.target.value)}
-            style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+            className="filter-select"
           >
             <option value="">Todas</option>
             {Object.entries(COMPETENCIAS).map(([key, val]) => (
@@ -706,8 +742,7 @@ function App() {
         {selectedSubject && (
           <button
             onClick={() => { setSelectedSubject(null); setIsDetailsSidebarOpen(false); }}
-            className="btn-secondary"
-            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', marginLeft: 'auto' }}
+            className="btn-secondary filter-clear-btn"
           >
             Limpiar Resaltado
           </button>
@@ -754,6 +789,9 @@ function App() {
                       key={sub.clave}
                       className={`${getCardClasses(sub)} ${!isMatch ? 'is-dimmed' : ''}`}
                       onClick={() => handleSubjectClick(sub)}
+                      onTouchStart={() => handleTouchStart(sub)}
+                      onTouchEnd={(e) => handleTouchEnd(e, sub)}
+                      onTouchMove={handleTouchMove}
                     >
                       <div className="area-dot" style={{ backgroundColor: `var(--area-color-${sub.area}, ${AREAS[sub.area]?.color})` }} />
                       <div className="card-header-row">
@@ -830,6 +868,9 @@ function App() {
                             key={`mob-${sub.clave}`}
                             className={`${getCardClasses(sub)} ${!isMatch ? 'is-dimmed' : ''}`}
                             onClick={() => handleSubjectClick(sub)}
+                            onTouchStart={() => handleTouchStart(sub)}
+                            onTouchEnd={(e) => handleTouchEnd(e, sub)}
+                            onTouchMove={handleTouchMove}
                             style={{ minHeight: '90px' }}
                           >
                             <div className="area-dot" style={{ backgroundColor: `var(--area-color-${sub.area}, ${AREAS[sub.area]?.color})` }} />
@@ -870,9 +911,13 @@ function App() {
                   <div
                     key={module.id}
                     className={`module-card ${isActive ? 'is-active-module' : ''}`}
-                    onClick={() => handleToggleModule(module.id)}
                   >
-                    <div className="module-header">
+                    <div
+                      className="module-header"
+                      onClick={() => handleToggleModule(module.id)}
+                      style={{ cursor: 'pointer' }}
+                      title="Activar / Desactivar este módulo"
+                    >
                       <span className="module-name">{module.name}</span>
                       <span className="module-checkbox">
                         {isActive ? '✓' : ''}
@@ -895,8 +940,14 @@ function App() {
                               e.stopPropagation(); // Avoid triggering module card toggle
                               handleSubjectClick(sub);
                             }}
+                            onTouchStart={() => handleTouchStart(sub)}
+                            onTouchEnd={(e) => {
+                              e.stopPropagation();
+                              handleTouchEnd(e, sub);
+                            }}
+                            onTouchMove={handleTouchMove}
                             style={{ cursor: 'pointer' }}
-                            title="Ver detalles de esta materia"
+                            title="Ver detalles de esta materia (Dejar presionado para ver temario)"
                           >
                             <span className="module-subject-clave">{sub.clave}</span>
                             <span className="module-subject-name">{sub.nombre}</span>
@@ -966,6 +1017,20 @@ function App() {
         <aside className={`details-sidebar glass-effect ${isDetailsSidebarOpen ? 'is-open' : ''}`}>
           {selectedSubject ? (
             <>
+              <button
+                onClick={() => {
+                  const isMobileTablet = window.innerWidth <= 1024;
+                  setIsDetailsSidebarOpen(false);
+                  if (!isMobileTablet) {
+                    setSelectedSubject(null);
+                  }
+                }}
+                className="sidebar-close-btn"
+                aria-label="Cerrar detalles"
+              >
+                ✕
+              </button>
+
               <div className="details-header">
                 <div className="details-clave">{selectedSubject.clave}</div>
                 <h2 className="details-name">{selectedSubject.nombre}</h2>
@@ -1062,14 +1127,7 @@ function App() {
                 </div>
               </div>
 
-              {/* MOBILE CLOSE DRAWER BUTTON */}
-              <button
-                onClick={() => setIsDetailsSidebarOpen(false)}
-                className="btn-primary mobile-only-close-btn"
-                style={{ marginTop: '1rem' }}
-              >
-                Cerrar Detalles
-              </button>
+              {/* Removed mobile bottom close button, replaced by top-right close button */}
             </>
           ) : (
             <div className="no-selection">
